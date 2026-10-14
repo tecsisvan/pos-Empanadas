@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS Empanadas & Bebidas</title>
+    <style>
+        :root { --primary: #2563eb; --danger: #dc2626; --success: #16a34a; --bg: #f8fafc; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); padding: 20px; max-width: 900px; margin: 0 auto; color: #1e293b; }
+        h1 { text-align: center; color: #0f172a; }
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        @media (max-width: 600px) { .grid { grid-template-columns: 1fr; } }
+        .panel { background: white; border: 1px solid #e2e8f0; padding: 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.05); margin-bottom: 20px; }
+        h3 { margin-top: 0; border-bottom: 2px solid #f1f5f9; padding-bottom: 10px; }
+        button { padding: 10px 15px; background: var(--primary); color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 10px; }
+        button:hover { opacity: 0.9; }
+        .btn-cobrar { background: var(--success); font-size: 1.1em; }
+        .btn-eliminar { background: var(--danger); width: auto; padding: 4px 10px; margin: 0; font-size: 0.85em; }
+        input, select { width: 100%; padding: 10px; margin: 6px 0; border: 1px solid #cbd5e1; border-radius: 5px; box-sizing: border-box; }
+        ul { list-style: none; padding: 0; margin: 0; }
+        li { display: flex; justify-content: space-between; align-items: center; padding: 10px; border-bottom: 1px solid #f1f5f9; }
+        .badge { background: #e2e8f0; padding: 3px 8px; border-radius: 12px; font-size: 0.85em; font-weight: bold; }
+        #estado { text-align: center; font-weight: bold; margin-bottom: 15px; color: var(--primary); min-height: 20px; }
+    </style>
+</head>
+<body>
+
+    <h1>🥟 Sistema POS y Control de Inventario</h1>
+    <div id="estado">Conectando con la base de datos...</div>
+
+    <div class="grid">
+        <!-- Panel de Ventas -->
+        <div class="panel">
+            <h3>🛒 Registrar Venta</h3>
+            <label>Producto:</label>
+            <select id="selectProducto"></select>
+            <label>Cantidad:</label>
+            <input type="number" id="cantVenta" value="1" min="1">
+            <button class="btn-cobrar" onclick="registrarVenta()">Cobrar y Descontar Stock</button>
+        </div>
+
+        <!-- Panel Nuevo Producto -->
+        <div class="panel">
+            <h3>➕ Añadir Producto al Menú</h3>
+            <input type="text" id="nuevoNombre" placeholder="Nombre (Ej. Empanada, Coca-Cola)">
+            <input type="number" id="nuevoPrecio" placeholder="Precio de Venta (Ej. 2500)">
+            <input type="number" id="nuevoStock" placeholder="Stock Inicial (Ej. 50)">
+            <button onclick="agregarProducto()">Guardar Producto</button>
+        </div>
+    </div>
+
+    <!-- Panel Inventario -->
+    <div class="panel">
+        <h3>📦 Inventario Actual en Tiempo Real</h3>
+        <ul id="listaInventario"></ul>
+    </div>
+
+<script>
+    // ⚠️ PEGA AQUÍ LA URL DE TU IMPLEMENTACIÓN DE GOOGLE APPS SCRIPT
+    const API_URL = "https://script.google.com/macros/s/AKfycbyi1BExpsUJfnOJreBfGyeSXv0TGEynRPxsHG-CLxfInl40JB4XBuG5QxhhhuUiLCJUcw/exec"; 
+
+    function mostrarEstado(msg) {
+        document.getElementById('estado').innerText = msg;
+    }
+
+    async function cargarProductos() {
+        if (API_URL === "TU_URL_DE_APPS_SCRIPT_AQUI") {
+            mostrarEstado("⚠️ Falta configurar la API_URL en el archivo index.html");
+            return;
+        }
+        mostrarEstado("Actualizando datos...");
+        try {
+            const res = await fetch(API_URL);
+            const productos = await res.json();
+            
+            const select = document.getElementById('selectProducto');
+            const lista = document.getElementById('listaInventario');
+            select.innerHTML = ''; 
+            lista.innerHTML = '';
+
+            productos.forEach(p => {
+                select.innerHTML += `<option value="${p.Nombre}" data-precio="${p.Precio}">${p.Nombre} - $${p.Precio}</option>`;
+                lista.innerHTML += `
+                    <li>
+                        <span><strong>${p.Nombre}</strong> - $${p.Precio}</span>
+                        <div>
+                            <span class="badge">Stock: ${p.Stock}</span>
+                            <button class="btn-eliminar" onclick="eliminarProducto('${p.ID}')">Eliminar</button>
+                        </div>
+                    </li>`;
+            });
+            mostrarEstado("✅ Sistema sincronizado");
+        } catch (err) {
+            mostrarEstado("❌ Error al conectar con Google Sheets");
+        }
+    }
+
+    async function registrarVenta() {
+        const select = document.getElementById('selectProducto');
+        if (!select.value) return alert("Primero crea un producto");
+        
+        const producto = select.value;
+        const precio = Number(select.options[select.selectedIndex].dataset.precio);
+        const cantidad = Number(document.getElementById('cantVenta').value);
+        const total = precio * cantidad;
+
+        await enviarDatos({ accion: "registrar_venta", producto, cantidad, total });
+        document.getElementById('cantVenta').value = 1;
+        cargarProductos();
+    }
+
+    async function agregarProducto() {
+        const nombre = document.getElementById('nuevoNombre').value.trim();
+        const precio = Number(document.getElementById('nuevoPrecio').value);
+        const stock = Number(document.getElementById('nuevoStock').value);
+        
+        if (!nombre || !precio) return alert("Completa nombre y precio");
+
+        await enviarDatos({ accion: "crear_producto", nombre, precio, stock });
+        document.getElementById('nuevoNombre').value = '';
+        document.getElementById('nuevoPrecio').value = '';
+        document.getElementById('nuevoStock').value = '';
+        cargarProductos();
+    }
+
+    async function eliminarProducto(id) {
+        if (confirm("¿Seguro que deseas eliminar este producto del inventario?")) {
+            await enviarDatos({ accion: "eliminar_producto", id });
+            cargarProductos();
+        }
+    }
+
+    async function enviarDatos(datos) {
+        mostrarEstado("Procesando en la nube...");
+        await fetch(API_URL, {
+            method: 'POST',
+            body: JSON.stringify(datos),
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }
+        });
+    }
+
+    window.onload = cargarProductos;
+</script>
+</body>
+</html>
